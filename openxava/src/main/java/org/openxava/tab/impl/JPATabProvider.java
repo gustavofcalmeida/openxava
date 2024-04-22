@@ -67,7 +67,13 @@ public class JPATabProvider extends TabProviderBase {
 					reference = reference.substring(idx + 1);
 				}								 			
 				String nestedReference = (String) getEntityReferencesReferenceNames().get(referenceMapping);
-				addJoin(entityAndJoins, reference, nestedReference);
+
+				if (!Is.emptyString(nestedReference) || getMetaModel().getMetaReference(reference).isRequired()) {
+					entityAndJoins.append(" join e");
+				} else {
+					entityAndJoins.append(" left join e");
+				}
+
 				if (!Is.emptyString(nestedReference)) {					
 					entityAndJoins.append(isAggregate(nestedReference)?".":"_");
 					entityAndJoins.append(nestedReference);
@@ -210,7 +216,7 @@ public class JPATabProvider extends TabProviderBase {
 		String selectBase = select.substring(0, whereIdx); 
 		StringBuffer joins = new StringBuffer();
 		for (String join: neededJoins) {
-			if (selectBase.contains(" " + join + " ") || selectBase.endsWith(" " + join)) continue;  
+//			if (selectBase.contains(" " + join + " ") || selectBase.endsWith(" " + join)) continue;  
 			joins.append(" left join ");
 			joins.append(join.replace("e_", "e."));
 			joins.append(" ");
