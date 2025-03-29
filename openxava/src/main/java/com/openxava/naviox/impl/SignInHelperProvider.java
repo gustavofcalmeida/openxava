@@ -14,10 +14,12 @@ package com.openxava.naviox.impl;
 import java.io.*;
 import java.util.*;
 
+import javax.persistence.*;
 import javax.servlet.*;
 import javax.servlet.http.*;
 
 import org.apache.commons.logging.*;
+import org.openxava.jpa.*;
 import org.openxava.util.*;
 import org.openxava.view.*;
 
@@ -66,18 +68,40 @@ public class SignInHelperProvider implements ISignInHelperProvider {
 	}	
 	
 	private Properties getUsers() {		
-		if (users == null) {
-			PropertiesReader reader = new PropertiesReader(
-					Users.class, PROPERTIES_FILE);
-			try {
-				users = reader.get();
-			} catch (IOException ex) {
-				log.error(XavaResources.getString("properties_file_error",
-						PROPERTIES_FILE), ex);
-				users = new Properties();
+		if(users == null) {
+			users = new Properties();
+		} else {
+			// delete current to get from DB again
+			users.clear();
+		}
+		try {
+			// get from IOxUser entity
+			List<IOxUser> liou = XPersistence.getManager().createQuery("select ou from OxUser ou", IOxUser.class).getResultList();
+			for( IOxUser user : liou ) {
+				if(user.canLogin()) {
+					users.put(user.getUsername(), user.getPassword());
+				}
+				XPersistence.getManager().detach(user);
+			}
+			// if there is no users in DB
+			if(users.size() <= 0) {
+				// appeal to naviox file
+				PropertiesReader reader = new PropertiesReader(Users.class, PROPERTIES_FILE);
+				try {
+					users = reader.get();
+				} catch (IOException ex) {
+					log.error(XavaResources.getString("properties_file_error", PROPERTIES_FILE), ex);
+				}
 			}
 		}
-		return users;		
+		catch(PersistenceException pe) {
+			log.error("Fail loading users from DB.", pe);
+		}
+		catch(Exception e) {
+			log.error("Unknown failure upon getting users list.", e);
+		}
+
+		return users;
 	}
 
 	public String getSignInURL() { 
