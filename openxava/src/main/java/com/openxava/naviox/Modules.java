@@ -14,12 +14,14 @@ import java.io.*;
 import java.util.*;
 import java.util.prefs.*;
 
+import javax.persistence.*;
 import javax.servlet.*;
 import javax.servlet.http.*;
 
 import org.apache.commons.logging.*;
 import org.openxava.application.meta.*;
 import org.openxava.hotswap.*;
+import org.openxava.jpa.*;
 import org.openxava.util.*;
 
 import com.openxava.naviox.impl.*;
@@ -407,12 +409,39 @@ public class Modules implements Serializable {
         if (applicationCodeVersion < Hotswap.getApplicationVersion()) {
         	all = null; 
         	applicationCodeVersion = Hotswap.getApplicationVersion();     
-        }				
-		if (all == null) {			
-			all = ModulesHelper.getAll(request); 
+        }
+		if (all == null) {
+			// create a new ArrayList so the custom list of modules will affect only this user
+			all = new ArrayList<>(ModulesHelper.getAll(request));
+			this.removeUnauthorizedModules(request, all);
 			Collections.sort(all, comparator);
 		}
 		return all;
+	}
+
+	private void removeUnauthorizedModules(HttpServletRequest request, List<MetaModule> all) {
+		try {
+			List<String> authorizedModules = XPersistence.getManager()
+					.createQuery("select m.name from OxUser ou join ou.modules m where ou.username = :username", String.class)
+					.setParameter("username", Users.getCurrent())
+					.getResultList();
+			outer:
+			for(Iterator<MetaModule> i = all.iterator(); i.hasNext();) {
+				String module = i.next().getModelName();
+				for(String rule : authorizedModules) {
+					if(module.matches(rule)) {
+						continue outer;
+					}
+				}
+				i.remove();
+			}
+		}
+		catch(PersistenceException pe) {
+			log.error("Error listing modules from user.", pe);
+		}
+		catch(Exception e) {
+			log.error("Error removing unauthorized modules from user.", e);
+		}
 	}
 	
 	private List<MetaModule> getNotInMenuModules() { 
